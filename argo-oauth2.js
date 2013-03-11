@@ -198,13 +198,13 @@ OAuth2.prototype.accessToken = function() {
     addHandler('request', function(env, next) {
       var that = env.oauth;
       that.options.clientStrategy.authenticate()(env, function(env) {
-        if (!env.requestBody) {
+        if (!env.request.body) {
           env.response.writeHead(400);
           env.response.end();
           return;
         }
         //var qs = url.parse(env.request.url).query;
-        var params = querystring.parse(env.requestBody.toString());
+        var params = querystring.parse(env.request.body.toString());
         
         var grantType = params.grant_type;
         var clientId = params.client_id;

@@ -7,8 +7,8 @@ function InMemoryUserStrategy(options) {
 
 InMemoryUserStrategy.prototype.authorize = function() {
   var that = this;
-  return function(addHandler) {
-    addHandler('request', function(env, next) {
+  return function(handle) {
+    handle('request', function(env, next) {
       if (env.request.method === 'GET') {
         var authRequest = env.oauth.getAuthRequestState(env);
         var body = '<html><body><form method="POST">' +
@@ -24,6 +24,7 @@ InMemoryUserStrategy.prototype.authorize = function() {
         env.response.end(body);
       } else if (env.request.method === 'POST') {
         env.request.getBody(function(err, body) {
+          console.log(body.toString());
           var loginInfo = qs.parse(body.toString());
 
           var username = loginInfo.username;

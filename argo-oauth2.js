@@ -19,26 +19,26 @@ function OAuth2(options) {
   this._tokenStrategies = {};
   this._tokenStrategies[bearer.scheme.toLowerCase()] = bearer;
 
-  var that = this;
-  if (that.options.supported) {
-    Object.keys(that.options.supported).forEach(function(grantType) {
-      that.support(grantType, that.options.supported[grantType]);
+  var self = this;
+  if (self.options.supported) {
+    Object.keys(self.options.supported).forEach(function(grantType) {
+      self.support(grantType, self.options.supported[grantType]);
     });
   }
 };
 
 OAuth2.prototype.package = function(argo) {
-  var that = this;
+  var self = this;
   return {
     name: 'argo-oauth2',
     install: function() {
-      argo.use(that.attach());
-      argo.route(that.endpoints.authorization, that.authorization());
-      argo.route(that.endpoints.accessToken, that.accessToken());
+      argo.use(self.attach());
+      argo.route(self.endpoints.authorization, self.authorization());
+      argo.route(self.endpoints.accessToken, self.accessToken());
 
       var oldRoute = argo.route.bind(argo);
       argo.route = function(path, options, handle) {
-        return oldRoute(path, options, that.protect(handle));
+        return oldRoute(path, options, self.protect(handle));
       };
     }
   };
@@ -73,10 +73,10 @@ OAuth2.prototype.getAuthRequestState = function(env) {
 };
 
 OAuth2.prototype.attach = function() {
-  var that = this;
-  return function(addHandler) {
-    addHandler('request', function(env, next) {
-      env.oauth = that;
+  var self = this;
+  return function(handle) {
+    handle('request', function(env, next) {
+      env.oauth = self;
       next(env);
     });
   };
@@ -99,7 +99,7 @@ OAuth2.prototype.authorize = function(env, next) {
   // TODO: Verify all parameters exist.
   // If not, return an error.
 
-  var that = this;
+  var self = this;
   env.request.getBody(function(err, body) {
     var requestBody = querystring.parse(body.toString());
 
@@ -118,8 +118,8 @@ OAuth2.prototype.authorize = function(env, next) {
     var scope = params.scope;
     var state = params.state;
 
-    if (that._supportedGrantTypes.indexOf('authorization_code') === -1 &&
-        that._supportedGrantTypes.indexOf('implicit') === -1) {
+    if (self._supportedGrantTypes.indexOf('authorization_code') === -1 &&
+        self._supportedGrantTypes.indexOf('implicit') === -1) {
       //TODO: Return error.
       // /cb?error=unsupported_response_type
       
@@ -136,14 +136,14 @@ OAuth2.prototype.authorize = function(env, next) {
         break;
     }
 
-    var tokenStrategy = that._tokenStrategies[that._supportedTokenTypes[impliedGrantType]];
+    var tokenStrategy = self._tokenStrategies[self._supportedTokenTypes[impliedGrantType]];
 
     var verification = {
       clientId: clientId,
       responseType: responseType,
       grantType: impliedGrantType,
       redirectUri: redirectUri,
-      generateCode: that._generateCode,
+      generateCode: self._generateCode,
       tokenStrategy: tokenStrategy
     };
 
@@ -194,10 +194,10 @@ OAuth2.prototype.deny = function(env, next) {
 };
 
 OAuth2.prototype.accessToken = function() {
-  return function(addHandler) {
-    addHandler('request', function(env, next) {
-      var that = env.oauth;
-      that.options.clientStrategy.authenticate()(env, function(env) {
+  return function(handle) {
+    handle('request', function(env, next) {
+      var self = env.oauth;
+      self.options.clientStrategy.authenticate()(env, function(env) {
         if (!env.request.body) {
           env.response.writeHead(400);
           env.response.end();
@@ -213,7 +213,7 @@ OAuth2.prototype.accessToken = function() {
 
         //if (grantType === 'authorization_code') grantType = 'code';
 
-        var tokenStrategy = that._tokenStrategies[that._supportedTokenTypes[grantType]];
+        var tokenStrategy = self._tokenStrategies[self._supportedTokenTypes[grantType]];
         var options = {
           grantType: grantType,
           clientId: clientId,
@@ -222,7 +222,7 @@ OAuth2.prototype.accessToken = function() {
           tokenStrategy: tokenStrategy
         };
 
-        that.options.clientStrategy.validateAccessTokenRequest(options, function(err, res) {
+        self.options.clientStrategy.validateAccessTokenRequest(options, function(err, res) {
           if (err) {
             console.log(err);
             env.response.writeHead(500);
@@ -252,24 +252,26 @@ OAuth2.prototype.accessToken = function() {
 };
 
 OAuth2.prototype.protect = function(wrapped) {
-  var that = this;
-  return function(addHandler) {
-    var addAuth = function(type, options, handler) {
+  var self = this;
+  return function(handle) {
+    console.log('adding protect');
+    var addAuth = function(type, options, handleFn) {
       if (type !== 'request') {
-        addHandler(type, options, handler); 
+        handle(type, options, handleFn); 
         return;
       }
 
       if (typeof options === 'function') {
-        handler = options;
+        handleFn = options;
         options = null;
       }
 
-      addHandler(type, options, function(env, next) {
+      handle(type, options, function(env, next) {
+        console.log('executing protect');
         var header = env.request.headers['authorization'];
         if (header) {
           var scheme = header.split(' ')[0] || '';
-          var tokenStrategy = that._tokenStrategies[scheme.toLowerCase()];
+          var tokenStrategy = self._tokenStrategies[scheme.toLowerCase()];
 
           if (!tokenStrategy) {
             var body = 'Unauthorized';
@@ -308,7 +310,7 @@ OAuth2.prototype.protect = function(wrapped) {
               return;
             }
 
-            handler(env, next);
+            handleFn(env, next);
           });
         } else {
           env.response.writeHead(401);
